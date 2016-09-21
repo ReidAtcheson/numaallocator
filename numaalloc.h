@@ -1,99 +1,42 @@
-/* The following code example is taken from the book
- * "The C++ Standard Library - A Tutorial and Reference"
- * by Nicolai M. Josuttis, Addison-Wesley, 1999
- *
- * (C) Copyright Nicolai M. Josuttis 1999.
+/* (C) Copyright Reid Atcheson 2016.
  * Permission to copy, use, modify, sell and distribute this software
  * is granted provided this copyright notice appears in all copies.
  * This software is provided "as is" without express or implied
  * warranty, and with no claim as to its suitability for any purpose.
  */
-#include <limits>
-#include <iostream>
-
 #include <numa.h>
 
-   template <class T  >
-   class NumaAlloc {
-     public:
-       int n;
-       // type definitions
-       typedef T        value_type;
-       typedef T*       pointer;
-       typedef const T* const_pointer;
-       typedef T&       reference;
-       typedef const T& const_reference;
-       typedef std::size_t    size_type;
-       typedef std::ptrdiff_t difference_type;
+namespace NumaAlloc {
+  template <class T> class NumaAlloc {
+    const int node;
+  public:
+    typedef T              value_type;
+    typedef std::true_type propagate_on_container_move_assignment;
+    typedef std::true_type is_always_equal;
 
-       NumaAlloc(int _n){this->n=_n;}
+    NumaAlloc(int node = 0) noexcept : node{node} {};
 
-       // rebind allocator to type U
-       template <class U>
-       struct rebind {
-           typedef NumaAlloc<U > other;
-       };
+    T* allocate (size_t num) {
+      auto ret = numa_alloc_onnode(num * sizeof(T), node);
+      if (!ret)
+	throw std::bad_alloc();
+      return reinterpret_cast<T*>(ret);
+    }
 
-       // return address of values
-       pointer address (reference value) const {
-           return &value;
-       }
-       const_pointer address (const_reference value) const {
-           return &value;
-       }
+    void deallocate (T* p, size_t num) noexcept {
+      numa_free(p, num * sizeof(T));
+    }
+  };
 
-       /* constructors and destructor
-        * - nothing to do because the allocator has no state
-        */
-       NumaAlloc() throw() {this->n=0;
-       }
-       NumaAlloc(const NumaAlloc& na) throw() {
-         this->n=na.n;
-       }
-       template <class U>
-         NumaAlloc (const NumaAlloc<U >& na) throw() {
-           this->n=na.n;
-       }
-       ~NumaAlloc() throw() {
-       }
+  template <class T1, class T2>
+    bool operator== (const NumaAlloc<T1> &,
+		     const NumaAlloc<T2> &) noexcept {
+    return true;
+  }
 
-       // return maximum number of elements that can be allocated
-       size_type max_size () const throw() {
-           return std::numeric_limits<std::size_t>::max() / sizeof(T);
-       }
-
-       // allocate but don't initialize num elements of type T
-       pointer allocate (size_type num, const void* = 0) {
-           pointer ret = (pointer)numa_alloc_onnode(num*sizeof(T),this->n);
-           return ret;
-       }
-
-       // initialize elements of allocated storage p with value value
-       void construct (pointer p, const T& value) {
-           // initialize memory with placement new
-           new((void*)p)T(value);
-       }
-
-       // destroy elements of initialized storage p
-       void destroy (pointer p) {
-           // destroy objects by calling their destructor
-           p->~T();
-       }
-
-       // deallocate storage p of deleted elements
-       void deallocate (pointer p, size_type num) {
-          numa_free(p,num*sizeof(T));
-       }
-   };
-
-   // return that all specializations of this allocator are interchangeable
-   template <class T1, class T2>
-   bool operator== (const NumaAlloc<T1>&,
-                    const NumaAlloc<T2>&) throw() {
-       return true;
-   }
-   template <class T1, class T2>
-   bool operator!= (const NumaAlloc<T1>&,
-                    const NumaAlloc<T2>&) throw() {
-       return false;
-   }
+  template <class T1, class T2>
+    bool operator!= (const NumaAlloc<T1> &,
+		     const NumaAlloc<T2> &) noexcept {
+    return false;
+  }
+}
