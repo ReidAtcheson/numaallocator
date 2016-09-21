@@ -32,7 +32,7 @@ int main(int argc,char** argv){
   int n2=1;
   int sz=5000;
 
-  typedef NumaAlloc<float> na_t;
+  typedef NumaAlloc::NumaAlloc<float> na_t;
 
 
   //Allocate vector of floats bound to numa node n1
